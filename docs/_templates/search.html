@@ -14,14 +14,10 @@
     <div id="search-results">
     </div>
 
-    <nav id="pagination" class="pagination" aria-label="pagination" hidden="true" >
-        <button class="pagination-previous" id="pagination-previous">
-            ← Previous
-        </button>
-        <ul class="pagination-list"></ul>
-        <button class="pagination-next" id="pagination-next">
-            Next →
-        </button>
+    <nav data-pagination class="pagination" aria-label="pagination" hidden="true" >
+        <button type="button" class="pagination-previous" data-pagination-previous >← Previous</button>
+        <ul class="pagination-list" data-pagination-list></ul>
+        <button type="button" class="pagination-next" data-pagination-next>Next →</button>
     </nav>
 {% endblock %}
 
@@ -52,16 +48,16 @@
             )
                 .then(result => {
                 // Display pagination if more than 1 page returned
-                    let nbPages = result["nbPages"]
-                    if (nbPages > 1) {
-                        document.querySelector("#pagination").hidden = false;
-                        displayPagination(page, nbPages)
-                    }
+                let nbPages = result["nbPages"]
+                if (nbPages > 1) {
+                    document.querySelector("#pagination").hidden = false;
+                    displayPagination(page, nbPages)
+                }
 
                 // Display hits
-                    let hits = result["hits"]
-                    addResultsList(hits, query, searchResultsContainer)
-                })
+                let hits = result["hits"]
+                addResultsList(hits, query, searchResultsContainer)
+            })
                 .catch((error) => console.log(error))
         }
 
