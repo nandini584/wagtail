@@ -57,10 +57,6 @@ class TestPageExplorer(WagtailTestUtils, TestCase):
         clear_button = soup.select_one(".w-active-filters .w-pill__remove")
         self.assertIsNotNone(active_filter)
         self.assertEqual(active_filter.get_text(separator=" ", strip=True), text)
-        self.assertEqual(
-            active_filter.attrs.get("data-a11y-dialog-show"),
-            "filters-dialog",
-        )
         self.assertIsNotNone(clear_button)
         self.assertNotIn(param, clear_button.attrs.get("data-w-swap-src-value"))
 
@@ -158,6 +154,28 @@ class TestPageExplorer(WagtailTestUtils, TestCase):
         self.assertEqual(
             page_ids, [self.child_page.id, self.new_page.id, self.old_page.id]
         )
+
+    def test_ordering_search_results_by_created_at(self):
+        response = self.client.get(
+            reverse("wagtailadmin_explore", args=(self.root_page.id,)),
+            {"q": "page", "ordering": "latest_revision_created_at"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "wagtailadmin/pages/index.html")
+
+        # child pages should be ordered by updated_at, oldest first
+        page_ids = [page.id for page in response.context["pages"]]
+        self.assertEqual(page_ids, [self.old_page.id, self.new_page.id])
+
+    def test_ordering_search_results_by_content_type(self):
+        # Ordering search results by content_type is not currently supported,
+        # but should not cause an error
+        response = self.client.get(
+            reverse("wagtailadmin_explore", args=(self.root_page.id,)),
+            {"q": "page", "ordering": "content_type"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "wagtailadmin/pages/index.html")
 
     def test_change_default_child_page_ordering_attribute(self):
         # save old get_default_order to reset at end of test
@@ -387,6 +405,25 @@ class TestPageExplorer(WagtailTestUtils, TestCase):
         # Check response
         self.assertEqual(response.status_code, 404)
 
+    def test_no_pagination_with_custom_ordering(self):
+        self.make_pages()
+
+        response = self.client.get(
+            reverse("wagtailadmin_explore", args=(self.root_page.id,)),
+            {"ordering": "ord"},
+        )
+
+        # Check response
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "wagtailadmin/pages/index.html")
+
+        # Check that we don't have a paginator page object
+        self.assertIsNone(response.context["page_obj"])
+
+        # Check that all pages are shown
+        self.assertContains(response, "1-153 of 153")
+        self.assertEqual(len(response.context["pages"]), 153)
+
     @override_settings(USE_L10N=True, USE_THOUSAND_SEPARATOR=True)
     def test_no_thousand_separators_in_bulk_action_checkbox(self):
         """
@@ -559,7 +596,10 @@ class TestPageExplorer(WagtailTestUtils, TestCase):
         self.assertEqual(response.status_code, 200)
         page_ids = [page.id for page in response.context["pages"]]
         self.assertEqual(page_ids, [self.old_page.id])
-        self.assertContains(response, "Search within 'New page (simple page)'")
+        self.assertContains(
+            response,
+            "Search in '<span class=\"w-title-ellipsis\">New page (simple page)</span>'",
+        )
 
     def test_filter_by_page_type(self):
         new_page_child = SimplePage(
@@ -586,7 +626,7 @@ class TestPageExplorer(WagtailTestUtils, TestCase):
         soup = self.get_soup(response.content)
         page_type_labels = {
             list(label.children)[-1].strip()
-            for label in soup.select("#filters-dialog #id_content_type label")
+            for label in soup.select("#id_content_type label")
         }
         self.assertIn("Simple page", page_type_labels)
         self.assertNotIn("Page", page_type_labels)
